@@ -7,7 +7,6 @@
 
 R_LIB_VERSION(r_flag);
 
-#define ISNULLSTR(x) (!(x) || !*(x))
 #define IS_IN_SPACE(f, i) ((f)->space_idx != -1 && (i)->space != (f)->space_idx)
 
 static const char *str_callback(RNum *user, ut64 off, int *ok) {
@@ -131,6 +130,8 @@ R_API RFlag * r_flag_new() {
 	}
 	f->flags->free = (RListFree) r_flag_item_free;
 	f->space_idx = -1;
+	f->callbacks = r_list_newf (NULL);
+	f->callbacks_i = r_list_newf (NULL);
 	f->spacestack = r_list_newf (NULL);
 	if (!f->spacestack) {
 		r_flag_free (f);
@@ -149,39 +150,6 @@ R_API RFlag * r_flag_new() {
 	return f;
 }
 
-R_API RFlagItem *r_flag_item_clone(RFlagItem *item) {
-	r_return_val_if_fail (item, NULL);
-
-	RFlagItem *n = R_NEW0 (RFlagItem);
-	if (!n) {
-		return NULL;
-	}
-	n->color = item->color ? strdup (item->color) : NULL;
-	n->comment = item->comment ? strdup (item->comment) : NULL;
-	n->alias = item->alias ? strdup (item->alias) : NULL;
-	n->name = item->name ? strdup (item->name) : NULL;
-	n->realname = item->realname ? strdup (item->realname) : NULL;
-	n->offset = item->offset;
-	n->size = item->size;
-	n->space = item->space;
-	return n;
-}
-
-R_API void r_flag_item_free(RFlagItem *item) {
-	if (!item) {
-		return;
-	}
-	free (item->color);
-	free (item->comment);
-	free (item->alias);
-	/* release only one of the two pointers if they are the same */
-	if (item->name != item->realname) {
-		free (item->name);
-	}
-	free (item->realname);
-	free (item);
-}
-
 R_API RFlag *r_flag_free(RFlag *f) {
 	r_return_val_if_fail (f, NULL);
 	int i;
@@ -192,6 +160,8 @@ R_API RFlag *r_flag_free(RFlag *f) {
 	ht_free (f->ht_name);
 
 	r_list_free (f->flags);
+	r_list_free (f->callbacks);
+	r_list_free (f->callbacks_i);
 	sdb_free (f->tags);
 	r_list_free (f->spacestack);
 	r_num_free (f->num);
@@ -334,8 +304,8 @@ R_API void r_flag_list(RFlag *f, int rad, const char *pfx) {
 }
 
 static RFlagItem *evalFlag(RFlag *f, RFlagItem *item) {
-	r_return_val_if_fail (f && item, NULL);
-	if (item->alias) {
+	r_return_val_if_fail (f, NULL);
+	if (item && item->alias) {
 		item->offset = r_num_math (f->num, item->alias);
 	}
 	return item;
@@ -362,18 +332,53 @@ R_API bool r_flag_exist_at(RFlag *f, const char *flag_prefix, ut16 fp_size, ut64
 	return false;
 }
 
+R_API void r_flag_callback_add(RFlag *f, RFlagCallback cb, RFlagCallbackI cbi) {
+	r_list_append (f->callbacks, cb);
+	r_list_append (f->callbacks_i, cbi);
+}
+
+R_API RFlagItem *r_flag_callback(RFlag *f, const char *name) {
+	RListIter *iter;
+	RFlagCallback cb;
+	r_list_foreach (f->callbacks, iter, cb) {
+		RFlagItem *fi = cb (f, name);
+		if (fi) {
+			return fi;
+		}
+	}
+	return NULL;
+}
+
+R_API RList *r_flag_callback_i(RFlag *f, ut64 addr) {
+	RListIter *iter;
+	RFlagCallbackI cbi;
+	r_list_foreach (f->callbacks_i, iter, cbi) {
+		RList *fi = cbi (f, addr);
+		if (fi) {
+			return fi;
+		}
+	}
+	return NULL;
+}
+
 /* return the flag item with name "name" in the RFlag "f", if it exists.
  * Otherwise, NULL is returned. */
 R_API RFlagItem *r_flag_get(RFlag *f, const char *name) {
 	r_return_val_if_fail (f, NULL);
-	RFlagItem *r = ht_find (f->ht_name, name, NULL);
-	return r ? evalFlag (f, r) : NULL;
+	RFlagItem *item = r_flag_callback (f, name);
+	if (!item) {
+		item = ht_find (f->ht_name, name, NULL);
+	}
+	return evalFlag (f, item);
 }
 
 /* return the first flag item that can be found at offset "off", or NULL otherwise */
 R_API RFlagItem *r_flag_get_i(RFlag *f, ut64 off) {
 	r_return_val_if_fail (f, NULL);
-	const RList *list = r_flag_get_list (f, off);
+	const RList *list = r_flag_callback_i (f, off);
+	if (!list) {
+		list = r_flag_get_list (f, off);
+	}
 	return list ? evalFlag (f, r_list_get_top (list)) : NULL;
 }
 
@@ -385,7 +390,10 @@ R_API RFlagItem *r_flag_get_i2(RFlag *f, ut64 off) {
 	r_return_val_if_fail (f, NULL);
 	RFlagItem *oitem = NULL, *item = NULL;
 	RListIter *iter;
-	const RList *list = r_flag_get_list (f, off);
+	const RList *list = r_flag_callback_i (f, off);
+	if (!list) {
+		list = r_flag_get_list (f, off);
+	}
 	if (!list) {
 		return NULL;
 	}
@@ -435,6 +443,12 @@ R_API RFlagItem *r_flag_get_at(RFlag *f, ut64 off, bool closest) {
 
 	RFlagItem *item, *nice = NULL;
 	RListIter *iter;
+
+	RList *list = r_flag_callback_i (f, off);
+	if (list) {
+		return r_list_head (list)->data;
+	}
+
 	const RFlagsAtOffset *flags_at = r_flag_get_nearest_list (f, off, -1);
 	if (!flags_at) {
 		return NULL;
@@ -481,6 +495,10 @@ R_API RFlagItem *r_flag_get_at(RFlag *f, ut64 off, bool closest) {
 
 /* return the list of flag items that are associated with a given offset */
 R_API const RList* /*<RFlagItem*>*/ r_flag_get_list(RFlag *f, ut64 off) {
+	RList *res = r_flag_callback_i (f, off);
+	if (res) {
+		return res;
+	}
 	const RFlagsAtOffset *item = r_flag_get_nearest_list (f, off, 0);
 	return item ? item->flags : NULL;
 }
@@ -533,7 +551,7 @@ R_API RFlagItem *r_flag_set(RFlag *f, const char *name, ut64 off, ut32 size) {
 		}
 		remove_offsetmap (f, item);
 	} else {
-		item = R_NEW0 (RFlagItem);
+		item = r_flag_item_new ();
 		if (!item) {
 			return NULL;
 		}
@@ -570,29 +588,6 @@ R_API RFlagItem *r_flag_set(RFlag *f, const char *name, ut64 off, ut32 size) {
 		r_list_append (list, item);
 	}
 	return item;
-}
-
-/* add/replace/remove the alias of a flag item */
-R_API void r_flag_item_set_alias(RFlagItem *item, const char *alias) {
-	r_return_if_fail (item);
-	free (item->alias);
-	item->alias = ISNULLSTR (alias)? NULL: strdup (alias);
-}
-
-/* add/replace/remove the comment of a flag item */
-R_API void r_flag_item_set_comment(RFlagItem *item, const char *comment) {
-	r_return_if_fail (item);
-	free (item->comment);
-	item->comment = ISNULLSTR (comment) ? NULL : strdup (comment);
-}
-
-/* add/replace/remove the realname of a flag item */
-R_API void r_flag_item_set_realname(RFlagItem *item, const char *realname) {
-	r_return_if_fail (item);
-	if (item->name != item->realname) {
-		free (item->realname);
-	}
-	item->realname = ISNULLSTR (realname) ? NULL : strdup (realname);
 }
 
 /* change the name of a flag item, if the new name is available.
