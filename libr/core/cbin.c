@@ -122,11 +122,6 @@ static RFlagItem *flag_cb(RCore *core, const char *name) {
 	if (addr != UT64_MAX) {
 		return get (name, addr);
 	}
-#if 0
-	if (!strcmp (name, "fakeflag")) {
-		return get (name, 0xde1aceba);
-	}
-#endif
 	return NULL;
 }
 
@@ -137,13 +132,6 @@ static RList *flag_cbi(RCore *core, ut64 addr) {
 		list = r_list_newf (NULL);
 		r_list_append (list, get (name, addr));
 	}
-#if 0
-	if (addr == 0xde1aceba) {
-		RList *ret = r_list_newf (r_flag_item_free);
-		r_list_append (ret, get ("fakeflag", addr));
-		return ret;
-	}
-#endif
 	return list;
 }
 

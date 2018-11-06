@@ -30,8 +30,5 @@ R_API ut64 r_bin_flag(RBin *bin, const char *name) {
 			}
 		}
 	}
-	if (!strcmp (name, "POLLA")) {
-		return 0x1234;
-	}
 	return UT64_MAX;
 }
