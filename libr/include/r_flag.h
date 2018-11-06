@@ -49,6 +49,14 @@ typedef struct r_flag_item_t {
 	char *alias;    /* used to define a flag based on a math expression (e.g. foo + 3) */
 } RFlagItem;
 
+// forward declaration magic
+struct r_flag_t;
+
+typedef RFlagItem *(*RFlagCallback)(struct r_flag_t *f, const char *name);
+typedef RList *(*RFlagCallbackI)(struct r_flag_t *f, ut64 addr);
+
+R_API void r_flag_set_callbacks(struct r_flag_t *f, RFlagCallback cb, RFlagCallbackI cbi, void *user);
+
 typedef struct r_flag_t {
 	st64 base;         /* base address for all flag items */
 	int space_idx;     /* index of the selected space in spaces array */
@@ -60,8 +68,9 @@ typedef struct r_flag_t {
 	RSkipList *by_off; /* flags sorted by offset, value=RFlagsAtOffset */
 	SdbHt *ht_name; /* hashmap key=item name, value=RList of items */
 	RList *flags;   /* list of RFlagItem contained in the flag */
-	RList *callbacks;
-	RList *callbacks_i;
+	RFlagCallback callback;
+	RFlagCallbackI callback_i;
+	void *user;
 	RList *spacestack;
 	PrintfCallback cb_printf;
 #if R_FLAG_ZONE_USE_SDB
@@ -93,11 +102,6 @@ typedef struct r_flag_bind_t {
 	RFlagPopSpace pop_fs;
 } RFlagBind;
 
-typedef RFlagItem *(*RFlagCallback)(RFlag *f, const char *name);
-typedef RList *(*RFlagCallbackI)(RFlag *f, ut64 addr);
-R_API void r_flag_callback_add(RFlag *f, RFlagCallback cb, RFlagCallbackI cbi);
-R_API RFlagItem *r_flag_callback(RFlag *f, const char *name);
-R_API RList *r_flag_callback_i(RFlag *f, ut64 addr);
 
 #define r_flag_bind_init(x) memset(&x,0,sizeof(x))
 R_API void r_flag_bind(RFlag *io, RFlagBind *bnd);

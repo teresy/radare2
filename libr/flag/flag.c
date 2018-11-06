@@ -130,8 +130,6 @@ R_API RFlag * r_flag_new() {
 	}
 	f->flags->free = (RListFree) r_flag_item_free;
 	f->space_idx = -1;
-	f->callbacks = r_list_newf (NULL);
-	f->callbacks_i = r_list_newf (NULL);
 	f->spacestack = r_list_newf (NULL);
 	if (!f->spacestack) {
 		r_flag_free (f);
@@ -160,8 +158,6 @@ R_API RFlag *r_flag_free(RFlag *f) {
 	ht_free (f->ht_name);
 
 	r_list_free (f->flags);
-	r_list_free (f->callbacks);
-	r_list_free (f->callbacks_i);
 	sdb_free (f->tags);
 	r_list_free (f->spacestack);
 	r_num_free (f->num);
@@ -332,31 +328,22 @@ R_API bool r_flag_exist_at(RFlag *f, const char *flag_prefix, ut16 fp_size, ut64
 	return false;
 }
 
-R_API void r_flag_callback_add(RFlag *f, RFlagCallback cb, RFlagCallbackI cbi) {
-	r_list_append (f->callbacks, cb);
-	r_list_append (f->callbacks_i, cbi);
+R_API void r_flag_set_callbacks(RFlag *f, RFlagCallback cb, RFlagCallbackI cbi, void *user) {
+	f->callback = cb;
+	f->callback_i = cbi;
+	f->user = user;
 }
 
-R_API RFlagItem *r_flag_callback(RFlag *f, const char *name) {
-	RListIter *iter;
-	RFlagCallback cb;
-	r_list_foreach (f->callbacks, iter, cb) {
-		RFlagItem *fi = cb (f, name);
-		if (fi) {
-			return fi;
-		}
+static inline RFlagItem *r_flag_callback(RFlag *f, const char *name) {
+	if (f->callback) {
+		return f->callback (f->user, name);
 	}
 	return NULL;
 }
 
-R_API RList *r_flag_callback_i(RFlag *f, ut64 addr) {
-	RListIter *iter;
-	RFlagCallbackI cbi;
-	r_list_foreach (f->callbacks_i, iter, cbi) {
-		RList *fi = cbi (f, addr);
-		if (fi) {
-			return fi;
-		}
+static inline RList *r_flag_callback_i(RFlag *f, ut64 addr) {
+	if (f->callback_i) {
+		return f->callback_i (f->user, addr);
 	}
 	return NULL;
 }
@@ -377,9 +364,10 @@ R_API RFlagItem *r_flag_get_i(RFlag *f, ut64 off) {
 	r_return_val_if_fail (f, NULL);
 	const RList *list = r_flag_callback_i (f, off);
 	if (!list) {
+		// TODO: must join, but its const :/
 		list = r_flag_get_list (f, off);
 	}
-	return list ? evalFlag (f, r_list_get_top (list)) : NULL;
+	return list? evalFlag (f, r_list_get_top (list)) : NULL;
 }
 
 /* return the first flag item at offset "off" that doesn't start with "loc.",

@@ -260,6 +260,7 @@ static char *swiftField(const char *dn, const char *cn) {
 	return NULL;
 }
 
+// TODO: R_IPI RList *r_bin_file_classes_from_symbols(RBinFile *bf, RBinObject *o) {
 R_IPI RList *r_bin_classes_from_symbols(RBinFile *bf, RBinObject *o) {
 	RBinSymbol *sym;
 	RListIter *iter;

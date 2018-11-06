@@ -2198,38 +2198,6 @@ static char *get_comments_cb(void *user, ut64 addr) {
 	return r_core_anal_get_comments ((RCore *)user, addr);
 }
 
-static RFlagItem gfi = {{0}};
-
-static RFlagItem *get(const char *name, ut64 addr) {
-	memset (&gfi, 0, sizeof (gfi));
-	if (name) {
-		gfi.name = name;
-		gfi.realname = name;
-	}
-	gfi.offset = addr;
-	return &gfi;
-}
-
-static RFlagItem *flag_cb(RFlag *f, const char *name) {
-#if 0
-	if (!strcmp (name, "fakeflag")) {
-		return get (name, 0xde1aceba);
-	}
-#endif
-	return NULL;
-}
-
-static RList *flag_cbi(RFlag *f, ut64 addr) {
-#if 0
-	if (addr == 0xde1aceba) {
-		RList *ret = r_list_newf (r_flag_item_free);
-		r_list_append (ret, get ("fakeflag", addr));
-		return ret;
-	}
-#endif
-	return NULL;
-}
-
 R_API bool r_core_init(RCore *core) {
 	core->blocksize = R_CORE_BLOCKSIZE;
 	core->block = (ut8 *)calloc (R_CORE_BLOCKSIZE + 1, 1);
@@ -2363,7 +2331,7 @@ R_API bool r_core_init(RCore *core) {
 	r_io_undo_enable (core->io, 1, 0); // TODO: configurable via eval
 	core->fs = r_fs_new ();
 	core->flags = r_flag_new ();
-	r_flag_callback_add (core->flags, flag_cb, flag_cbi);
+	r_flag_set_callbacks (core->flags, NULL, NULL, NULL);
 	core->flags->cb_printf = r_cons_printf;
 	core->graph = r_agraph_new (r_cons_canvas_new (1, 1));
 	core->graph->need_reload_nodes = false;

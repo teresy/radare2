@@ -104,9 +104,56 @@ R_API int r_core_bin_set_by_name(RCore *core, const char * name) {
 	return false;
 }
 
-R_API int r_core_bin_set_env(RCore *r, RBinFile *binfile) {
+static RFlagItem gfi = {0};
+
+static RFlagItem *get(const char *name, ut64 addr) {
+	free (gfi.name);
+	memset (&gfi, 0, sizeof (gfi));
+	if (name) {
+		gfi.name = strdup (name);
+		gfi.realname = gfi.name;
+	}
+	gfi.offset = addr;
+	return &gfi;
+}
+
+static RFlagItem *flag_cb(RCore *core, const char *name) {
+	ut64 addr = r_bin_flag (core->bin, name);
+	if (addr != UT64_MAX) {
+		return get (name, addr);
+	}
+#if 0
+	if (!strcmp (name, "fakeflag")) {
+		return get (name, 0xde1aceba);
+	}
+#endif
+	return NULL;
+}
+
+static RList *flag_cbi(RCore *core, ut64 addr) {
+	RList *list = NULL;
+	const char *name = r_bin_flag_i (core->bin, addr);
+	if (name) {
+		list = r_list_newf (NULL);
+		r_list_append (list, get (name, addr));
+	}
+#if 0
+	if (addr == 0xde1aceba) {
+		RList *ret = r_list_newf (r_flag_item_free);
+		r_list_append (ret, get ("fakeflag", addr));
+		return ret;
+	}
+#endif
+	return list;
+}
+
+R_API bool r_core_bin_set_env(RCore *r, RBinFile *binfile) {
 	RBinObject *binobj = binfile ? binfile->o: NULL;
 	RBinInfo *info = binobj ? binobj->info: NULL;
+	if (!r_config_get_i (r->config, "bin.flags")) {
+		r_flag_set_callbacks (r->flags, flag_cb, flag_cbi, r);
+		return 0;
+	}
 	if (info) {
 		int va = info->has_va;
 		const char * arch = info->arch;
@@ -231,8 +278,8 @@ static void _print_strings(RCore *r, RList *list, int mode, int va) {
 				str = r_str_newf ("str.%s", f_name);
 				f_realname = r_str_newf ("\"%s\"", string->string);
 			}
-			RFlagItem *flag = r_flag_set (r->flags, str, addr, string->size);
-			r_flag_item_set_realname (flag, f_realname);
+			RFlagItem *item = r_flag_set (r->flags, str, addr, string->size);
+			r_flag_item_set_realname (item, f_realname);
 			free (str);
 			free (f_name);
 			free (f_realname);

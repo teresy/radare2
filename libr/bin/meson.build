@@ -7,6 +7,7 @@ files = [
   'blang.c',
   'filter.c',
   'bfile.c',
+  'bflag.c',
   'obj.c',
   'open.c',
   'p/bin_any.c',
