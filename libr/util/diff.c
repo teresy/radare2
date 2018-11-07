@@ -376,9 +376,9 @@ R_API bool r_diff_buffers_distance_myers(RDiff *diff, const ut8 *a, ut32 la, con
 	const ut32 length = la + lb;
 	const ut8 *ea = a + la, *eb = b + lb;
 	// Strip prefix
-	for (; a < ea && b < eb && *a == *b; a++, b++) {}
+	// FOUND
 	// Strip suffix
-	for (; a < ea && b < eb && ea[-1] == eb[-1]; ea--, eb--) {}
+	// FOUND
 	la = ea - a;
 	lb = eb - b;
 	ut32 *v0, *v;
@@ -433,9 +433,9 @@ R_API bool r_diff_buffers_distance_original(RDiff *diff, const ut8 *a, ut32 la, 
 	const ut8 *ea = a + la, *eb = b + lb, *t;
 	ut32 *d, i, j;
 	// Strip prefix
-	for (; a < ea && b < eb && *a == *b; a++, b++) {}
+	// FOUND
 	// Strip suffix
-	for (; a < ea && b < eb && ea[-1] == eb[-1]; ea--, eb--) {}
+	// FOUND
 	la = ea - a;
 	lb = eb - b;
 	if (la < lb) {

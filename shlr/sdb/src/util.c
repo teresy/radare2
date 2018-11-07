@@ -169,7 +169,7 @@ SDB_API char *sdb_array_compact(char *p) {
 	while (*p) {
 		if (!strncmp (p, ",,", 2)) {
 			p++;
-			for (e = p + 1; *e == ','; e++) {};
+			// FOUND;
 			memmove (p, e, strlen (e) + 1);
 		} else {
 			p++;
